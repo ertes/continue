@@ -21,7 +21,7 @@ run again.
 Advanced reentering
 -------------------
 
-The most general way to reenter is to run perform a computation when
+The most general way to reenter is to perform a computation when
 reentering:
 
     addCont False . M.singleton "abc" $ do
