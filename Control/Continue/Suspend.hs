@@ -13,7 +13,6 @@ module Control.Continue.Suspend
       continue,
       continue_,
       suspend,
-      suspend_
     )
     where
 
@@ -22,49 +21,44 @@ import Data.Functor.Plus
 import Data.Monoid
 
 
--- | Add the given set of continuations without suspending.
+-- | Add the given set of continuations and possibly suspend.
 
 addCont ::
     (Monad m)
-    => a    -- ^ What to return now.
-    -> f (Continue e f m a)  -- ^ What to run and return when reentering.
-    -> Continue e f m a
-addCont x c = Continue (return (Right x, c))
+    => Either e a    -- ^ What to return now (left suspends).
+    -> f (ContinueT e f m a)  -- ^ What to run and return when reentering.
+    -> ContinueT e f m a
+addCont mx cf = ContinueT (return (mx, cf))
 
 
 -- | Add the given set of continuations without suspending.
 
-addCont_ :: (Monad m) => f (Continue e f m ()) -> Continue e f m ()
-addCont_ = addCont ()
+addCont_ :: (Monad m) => f (ContinueT e f m ()) -> ContinueT e f m ()
+addCont_ = addCont (Right ())
 
 
--- | Continue here with the given value.
+-- | Allow to continue here with the given value.
 
 continue ::
     (Monad m, Monoid e, Plus f)
-    => a    -- ^ What to return now.
-    -> f a  -- ^ What to return when reentering.
-    -> Continue e f m a
-continue x c =
-    Continue (return (Right x, fmap return c))
+    => Either e a      -- ^ What to return now (left suspends).
+    -> f (Either e a)  -- ^ What to return when reentering (left suspends).
+    -> ContinueT e f m a
+continue mx c =
+    ContinueT (return (mx, fmap (\mx -> ContinueT (return (mx, zero))) c))
 
 
--- | Continue here.
+-- | Allow to continue here.
 
 continue_ ::
     (Monad m, Monoid e, Plus f)
-    => f ()  -- ^ What to return on reentering.
-    -> Continue e f m ()
-continue_ = continue ()
+    => f ()  -- ^ Reentering key.
+    -> ContinueT e f m ()
+continue_ c = continue (Right ()) (fmap Right c)
 
 
--- | Suspend with the given value.
+-- | Suspend with the given value.  Does not register any continuation
+-- spots.  Note that @suspend mempty@ is equivalent to @empty@.
 
-suspend :: (Monad m, Plus f) => e -> Continue e f m a
-suspend ex = Continue (return (Left ex, zero))
-
-
--- | Suspend with 'mempty'.
-
-suspend_ :: (Monad m, Monoid e, Plus f) => Continue e f m a
-suspend_ = Continue (return (Left mempty, zero))
+suspend :: (Monad m, Plus f) => e -> ContinueT e f m a
+suspend ex = ContinueT (return (Left ex, zero))
