@@ -6,12 +6,13 @@ computation and reenter it at any of those spots:
 
     label name = continue_ (M.singleton name ())
 
-    do label "first"
-       liftIO (putStrLn "Hello")
-       label "second"
-       liftIO (putStrLn "World!")
+    myComp = do
+        label "first"
+        liftIO (putStrLn "Hello")
+        label "second"
+        liftIO (putStrLn "World!")
 
-This computation gives you to spots for reentry, "first" and "second".
+This computation gives you two spots for reentry, "first" and "second".
 If you reenter at "first", the whole computation will be run again.  If
 you reenter at "second", only the second `putStrLn` computation will be
 run again.
