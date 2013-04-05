@@ -24,10 +24,13 @@ import Control.Arrow
 import Control.Exception (SomeException)
 import Control.Monad
 import Control.Monad.Base
-import Control.Monad.Fix
+import Control.Monad.Error.Class
 import Control.Monad.Identity
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
 import Control.Monad.Trans
 import Control.Monad.Trans.Control
+import Control.Monad.Writer.Class
 import Data.Functor.Plus
 import Data.Monoid
 
@@ -82,22 +85,6 @@ instance (Monad m, Monoid e, Plus f) => Monad (ContinueT e f m) where
 instance (MonadBase b m, Monoid e, Plus f) => MonadBase b (ContinueT e f m) where
     liftBase = liftBaseDefault
 
-instance (MonadFix m, Monoid e, Plus f) => MonadFix (ContinueT e f m) where
-    mfix f =
-        ContinueT . mfix $ \ ~(mx, _) ->
-            runContinueT . f .
-            either (const $ error "Feedback broken by suspension") id $ mx
-
-instance (MonadIO m, Monoid e, Plus f) => MonadIO (ContinueT e f m) where
-    liftIO = ContinueT . liftM (\x -> (Right x, zero)) . liftIO
-
-instance (Monad m, Monoid e, Plus f) => MonadPlus (ContinueT e f m) where
-    mzero = empty
-    mplus = (<|>)
-
-instance (Plus f) => MonadTrans (ContinueT e f) where
-    lift = ContinueT . liftM (\x -> (Right x, zero))
-
 instance (MonadBaseControl b m, Monoid e, Plus f) => MonadBaseControl b (ContinueT e f m) where
     data StM (ContinueT e f m) a =
         StContinueT (StM m (Either e a, f (ContinueT e f m a)))
@@ -111,6 +98,64 @@ instance (MonadBaseControl b m, Monoid e, Plus f) => MonadBaseControl b (Continu
             return (Right x, zero)
 
     restoreM (StContinueT s) = ContinueT (restoreM s)
+
+instance (Monad m, Monoid e, Plus f) => MonadError e (ContinueT e f m) where
+    throwError ex = ContinueT (return (Left ex, zero))
+    catchError (ContinueT c) h =
+        ContinueT $ do
+            (mx, cf) <- c
+            case mx of
+              Left ex -> do
+                  (mxh, cfh) <- runContinueT (h ex)
+                  return (mxh, cf <!> cfh)
+              Right _ -> return (mx, cf)
+
+-- | Warning:  If feedback is broken by suspension you get a run-time
+-- error.
+
+instance (MonadFix m, Monoid e, Plus f) => MonadFix (ContinueT e f m) where
+    mfix f =
+        ContinueT . mfix $ \ ~(mx, _) ->
+            runContinueT . f .
+            either (const $ error "Feedback broken by suspension") id $ mx
+
+instance (MonadIO m, Monoid e, Plus f) => MonadIO (ContinueT e f m) where
+    liftIO = ContinueT . liftM (\x -> (Right x, zero)) . liftIO
+
+instance (Monad m, Monoid e, Plus f) => MonadPlus (ContinueT e f m) where
+    mzero = empty
+    mplus = (<|>)
+
+instance (MonadReader r m, Monoid e, Plus f) => MonadReader r (ContinueT e f m) where
+    ask = lift ask
+    local f (ContinueT c) = ContinueT (local f c)
+    reader = ContinueT . liftM (\x -> (Right x, zero)) . reader
+
+instance (MonadState s m, Monoid e, Plus f) => MonadState s (ContinueT e f m) where
+    get = lift get
+    put = lift . put
+    state = lift . state
+
+instance (Plus f) => MonadTrans (ContinueT e f) where
+    lift = ContinueT . liftM (\x -> (Right x, zero))
+
+instance (MonadWriter l m, Monoid e, Plus f) => MonadWriter l (ContinueT e f m) where
+    listen (ContinueT c) =
+        ContinueT $ do
+            ((mx, cf), w) <- listen c
+            let addLog x = (x, w)
+            return (fmap addLog mx, fmap (fmap addLog) cf)
+
+    pass (ContinueT c) =
+        ContinueT . pass $ do
+            (mx, cf') <- c
+            let cf = fmap (fmap fst) cf'
+            case mx of
+              Left ex      -> return ((Left ex, cf), id)
+              Right (x, f) -> return ((Right x, cf), f)
+
+    tell = lift . tell
+    writer = lift . writer
 
 
 -- | 'ContinueT' over 'Identity'.

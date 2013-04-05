@@ -41,10 +41,21 @@ Test-suite continue-test
     Type: exitcode-stdio-1.0
     Build-depends:
         base >= 4.5 && < 5,
-        continue
+        containers,
+        continue,
+        happstack-server,
+        monad-control,
+        mtl,
+        transformers-base
     Default-language: Haskell2010
     Default-extensions:
+        FlexibleInstances
+        GeneralizedNewtypeDeriving
+        MultiParamTypeClasses
+        StandaloneDeriving
         TemplateHaskell
+        TypeFamilies
+        UndecidableInstances
     GHC-Options: -threaded -rtsopts
     Hs-source-dirs: test
     Main-is: Main.hs
