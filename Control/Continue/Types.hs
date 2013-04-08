@@ -21,6 +21,7 @@ module Control.Continue.Types
 import qualified Data.Bifunctor as Bi
 import Control.Applicative
 import Control.Arrow
+import Control.Continue.Class
 import Control.Exception (SomeException)
 import Control.Monad
 import Control.Monad.Base
@@ -35,7 +36,8 @@ import Data.Functor.Plus
 import Data.Monoid
 
 
--- | This monad transformer adds suspensions under @f@ to @m@.
+-- | This monad transformer adds continuations under @f@ and @e@-typed
+-- suspensions to @m@.
 
 newtype ContinueT e f m a =
     ContinueT {
@@ -98,6 +100,9 @@ instance (MonadBaseControl b m, Monoid e, Plus f) => MonadBaseControl b (Continu
             return (Right x, zero)
 
     restoreM (StContinueT s) = ContinueT (restoreM s)
+
+instance (Monad m, Monoid e, Plus f) => MonadContinue e f (ContinueT e f m) where
+    addCont mx cf = ContinueT (return (mx, cf))
 
 instance (Monad m, Monoid e, Plus f) => MonadError e (ContinueT e f m) where
     throwError ex = ContinueT (return (Left ex, zero))

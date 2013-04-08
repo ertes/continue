@@ -8,8 +8,9 @@
 
 module Control.Continue
     ( -- * Continue modules
-      module Control.Continue.Suspend,
+      module Control.Continue.Class,
       module Control.Continue.Types,
+      module Control.Continue.Utils,
 
       -- * Convenience reexports
       Alt(..),
@@ -17,6 +18,7 @@ module Control.Continue
     )
     where
 
-import Control.Continue.Suspend
+import Control.Continue.Class
 import Control.Continue.Types
+import Control.Continue.Utils
 import Data.Functor.Plus

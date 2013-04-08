@@ -23,10 +23,12 @@ Library
         monad-control     >= 0.3 && < 1,
         mtl               >= 2.0 && < 3,
         semigroupoids     >= 3.0 && < 4,
+        transformers      >= 0.3 && < 1,
         transformers-base >= 0.4 && < 1
     Default-language: Haskell2010
     Default-extensions:
         FlexibleInstances
+        FunctionalDependencies
         MultiParamTypeClasses
         TypeFamilies
     Other-extensions:
@@ -34,28 +36,22 @@ Library
     GHC-Options: -W
     Exposed-modules:
         Control.Continue
-        Control.Continue.Suspend
+        Control.Continue.Class
         Control.Continue.Types
+        Control.Continue.Utils
 
 Test-suite continue-test
     Type: exitcode-stdio-1.0
     Build-depends:
         base >= 4.5 && < 5,
+        conduit,
         containers,
         continue,
-        happstack-server,
-        monad-control,
-        mtl,
-        transformers-base
+        http-types,
+        wai,
+        warp
     Default-language: Haskell2010
     Default-extensions:
-        FlexibleInstances
-        GeneralizedNewtypeDeriving
-        MultiParamTypeClasses
-        StandaloneDeriving
-        TemplateHaskell
-        TypeFamilies
-        UndecidableInstances
     GHC-Options: -threaded -rtsopts
     Hs-source-dirs: test
     Main-is: Main.hs
