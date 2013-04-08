@@ -1,7 +1,7 @@
 Name:          continue
-Version:       0.1.0
-Category:      Continuation-based user interaction monad
-Synopsis:      Control
+Version:       0.1.1
+Category:      Control
+Synopsis:      Continuation-based user interaction monad
 Maintainer:    Ertugrul Söylemez <es@ertes.de>
 Author:        Ertugrul Söylemez <es@ertes.de>
 Copyright:     (c) 2012 Ertugrul Söylemez
