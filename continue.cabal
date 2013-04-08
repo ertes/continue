@@ -10,11 +10,16 @@ License-file:  LICENSE
 Build-type:    Simple
 Stability:     experimental
 Cabal-version: >= 1.10
+Extra-source-files: README.md
 Description:
     This library implements a monad transformer for suspendable
     computations, similar and related to free comonads.  It allows to
     write continuation-based web frameworks, command line applications
     and similar interfaces.
+
+Source-repository head
+    type:     git
+    location: git://github.com/ertes/continue.git
 
 Library
     Build-depends:
@@ -40,18 +45,18 @@ Library
         Control.Continue.Types
         Control.Continue.Utils
 
-Test-suite continue-test
-    Type: exitcode-stdio-1.0
-    Build-depends:
-        base >= 4.5 && < 5,
-        conduit,
-        containers,
-        continue,
-        http-types,
-        wai,
-        warp
-    Default-language: Haskell2010
-    Default-extensions:
-    GHC-Options: -threaded -rtsopts
-    Hs-source-dirs: test
-    Main-is: Main.hs
+-- Test-suite continue-test
+--     Type: exitcode-stdio-1.0
+--     Build-depends:
+--         base >= 4.5 && < 5,
+--         conduit,
+--         containers,
+--         continue,
+--         http-types,
+--         wai,
+--         warp
+--     Default-language: Haskell2010
+--     Default-extensions:
+--     GHC-Options: -threaded -rtsopts
+--     Hs-source-dirs: test
+--     Main-is: Main.hs
