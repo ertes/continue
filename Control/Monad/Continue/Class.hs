@@ -1,14 +1,21 @@
 -- |
--- Module:     Control.Continue.Class
+-- Module:     Control.Monad.Continue.Class
 -- Copyright:  (c) 2013 Ertugrul Soeylemez
 -- License:    BSD3
 -- Maintainer: Ertugrul Soeylemez <es@ertes.de>
 
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Continue.Class
+module Control.Monad.Continue.Class
     ( -- * Suspension
-      MonadContinue(..)
+      MonadContinue(..),
+
+      -- * Basic utilities
+      addCont_,
+      continue,
+      continue_,
+      suspend,
+      suspendWith
     )
     where
 
@@ -19,8 +26,8 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans.Writer.Lazy
-import Data.Monoid
 import Data.Functor.Plus
+import Data.Monoid
 
 
 -- | Type class for monads that support suspension and continuation
@@ -47,7 +54,7 @@ instance (MonadContinue e f m) => MonadContinue e f (ReaderT r m) where
             addCont mx (fmap (flip runReaderT env) c)
 
 -- | Time travel warning: Captures the current state, not the state at
--- reentry!
+-- reentry.  Use 'ContinueT' over 'StateT' instead to fix this.
 
 instance (MonadContinue e f m) => MonadContinue e f (StateT s m) where
     addCont mx c =
@@ -56,7 +63,7 @@ instance (MonadContinue e f m) => MonadContinue e f (StateT s m) where
                     (fmap (flip runStateT s) c)
 
 -- | Time travel warning: Captures the current state, not the state at
--- reentry!
+-- reentry.  Use 'ContinueT' over 'StateT' instead to fix this.
 
 instance (MonadContinue e f m) => MonadContinue e f (Ss.StateT s m) where
     addCont mx c =
@@ -75,3 +82,42 @@ instance (MonadContinue e f m, Monoid l) => MonadContinue e f (Ws.WriterT l m) w
         Ws.WriterT $
             addCont (fmap (flip (,) mempty) mx)
                     (fmap Ws.runWriterT c)
+
+
+-- | Add the given set of continuations without suspending.
+
+addCont_ :: (MonadContinue e f m) => f (m ()) -> m ()
+addCont_ = addCont (Right ())
+
+
+-- | Allow to continue here with the given value.
+
+continue ::
+    (MonadContinue e f m)
+    => Either e a      -- ^ What to return now (left suspends).
+    -> f (Either e a)  -- ^ What to return when reentering (left suspends).
+    -> m a
+continue mx = addCont mx . fmap (\mx -> addCont mx zero)
+
+
+-- | Allow to continue here.
+
+continue_ ::
+    (MonadContinue e f m)
+    => f ()  -- ^ Reentering key.
+    -> m ()
+continue_ = addCont (Right ()) . fmap (const $ return ())
+
+
+-- | Suspend with the given value.  Does not register any continuation
+-- spots.  Note that @suspend mempty@ is equivalent to @empty@.
+
+suspend :: (MonadContinue e f m) => e -> m a
+suspend ex = addCont (Left ex) zero
+
+
+-- | Suspend with 'mempty' and register the given continuations.  Note
+-- that @suspendWith zero@ is equivalent to @empty@.
+
+suspendWith :: (MonadContinue e f m) => f (m a) -> m a
+suspendWith = addCont (Left mempty)

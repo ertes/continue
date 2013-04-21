@@ -13,7 +13,7 @@ import Blaze.ByteString.Builder.Char8
 import Control.Applicative
 import Control.Category
 import Control.Concurrent
-import Control.Continue
+import Control.Monad.Continue
 import Control.Monad.Trans
 import Data.Conduit
 import Data.Map (Map)

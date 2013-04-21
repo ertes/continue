@@ -1,31 +1,50 @@
 -- |
--- Module:     Control.Continue.Types
+-- Module:     Control.Monad.Continue
 -- Copyright:  (c) 2012 Ertugrul Soeylemez
 -- License:    BSD3
 -- Maintainer: Ertugrul Soeylemez <es@ertes.de>
 --
--- Types used in the continue library.
+-- This library implements a monad transformer for suspendable
+-- computations, similar and related to free comonads.  It allows to
+-- write continuation-based web frameworks, command line applications
+-- and similar interfaces, where you want to reenter a computation at
+-- arbitrary spots.
 
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Continue.Types
-    ( -- * Suspendable computations
-      ContinueT(..),
+module Control.Monad.Continue
+    ( -- $doc
+
+      -- * Continue
       Continue,
+      runContinue,
+
+      -- * ContinueT
+      ContinueT(..),
+      mapContinueT,
+
+      -- * Combinators
+      orElse,
 
       -- * Convenience types
-      LastEx
+      LastEx,
+
+      -- * Reexports
+      module Control.Monad.Continue.Class,
+      Alt(..),
+      Plus(..)
     )
     where
 
 import qualified Data.Bifunctor as Bi
 import Control.Applicative
 import Control.Arrow
-import Control.Continue.Class
 import Control.Exception (SomeException)
 import Control.Monad
 import Control.Monad.Base
+import Control.Monad.Continue.Class
 import Control.Monad.Error.Class
+import Control.Monad.Fix
 import Control.Monad.Identity
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
@@ -115,7 +134,7 @@ instance (Monad m, Monoid e, Plus f) => MonadError e (ContinueT e f m) where
                   return (mxh, cf <!> cfh)
               Right _ -> return (mx, cf)
 
--- | Warning:  If feedback is broken by suspension you get a run-time
+-- | Warning: If feedback is broken by suspension you get a run-time
 -- error.
 
 instance (MonadFix m, Monoid e, Plus f) => MonadFix (ContinueT e f m) where
@@ -172,3 +191,115 @@ type Continue e f = ContinueT e f Identity
 -- the suspension monoid.
 
 type LastEx = Last SomeException
+
+
+-- | Apply the given morphism to the underlying monad.
+
+mapContinueT ::
+    (Functor f, Monad n)
+    => (forall a. m a -> n a)  -- ^ Monad morphism to apply.
+    -> ContinueT e f m a
+    -> ContinueT e f n a
+mapContinueT mm (ContinueT c) =
+    ContinueT $ do
+        (mx, cf) <- mm c
+        return (mx, fmap (mapContinueT mm) cf)
+
+
+-- | Similar to '<|>', but tries the second computation only if the
+-- first one actually suspends.  Note that not running the second
+-- computation also means that it can't register reentry spots.
+--
+-- As an operator this function is infixr 3.
+
+orElse ::
+    (Alt f, Monad m, Monoid e)
+    => ContinueT e f m a
+    -> ContinueT e f m a
+    -> ContinueT e f m a
+orElse (ContinueT c1) (ContinueT c2) =
+    ContinueT $ do
+        (mx1, cf1) <- c1
+        case mx1 of
+          Left ex1 -> do
+              (mx2, cf2) <- c2
+              return (Bi.first (ex1 <>) mx2, cf1 <!> cf2)
+          Right _ -> return (mx1, cf1)
+
+infixr 3 `orElse`
+
+
+-- | Run the given 'Continue' computation.
+
+runContinue :: Continue e f a -> (Either e a, f (Continue e f a))
+runContinue = runIdentity . runContinueT
+
+
+{- $doc
+
+A computation of type @'ContinueT' e f m a@ is a computation that may
+either conclude with a value of type @a@ or suspend with a value of type
+@e@.  Before suspending or concluding it may register a set of reentry
+spots of type @f (ContinueT e f m a)@.  These spots are collected and
+returned along with the suspension/conclusion value:
+
+> newtype ContinueT e f m a
+
+To run a @ContinueT@ computation you can use the 'runContinueT'
+function:
+
+> runContinueT :: ContinueT e f m a
+>              -> m (Either e a, f (ContinueT e f m a))
+
+The result is either a suspension value of type @e@ or a conclusion of
+type @a@.  In both cases you can reenter the computation at the
+registered spots.  Example:
+
+> type MyMonad = ContinueT () (Map String) Identity
+>
+> myComp :: MyMonad Integer
+> myComp = do
+>     x <- continue (Right 3) (M.singleton "x" (Right 15))
+>     y <- continue (Right 4) (M.singleton "y" (Right 17))
+>     return (x + y)
+
+When you first run this computation the result will be the conclusion 3
++ 4.  Since 'MyMonad' transforms to 'Identity' we can use the
+convenience type alias 'Continue' and the function 'runContinue':
+
+> type MyMonad = Continue () (Map String)
+>
+> runContinue myComp
+> = (Right 7, reentryMap)
+
+Along with the result you will also get a reentry map of type @Map
+String (MyMonad Integer)@.  If you run the computation indexed by \"x\",
+you will get the result 15 + 4.  This iteration itself will return a new
+reentry map on its part.  That map will contain only the reentry spot
+\"y\", because the reentry indexed by \"x\" does not register itself
+again.
+
+You can use the more general 'addCont' function to register arbitrary
+reentry spots, which themselves are allowed to register new spots.  Also
+In some kinds of applications you would want to combine the reentry maps
+produced.  You can use the '<!>' function to do that:
+
+> let overallReentryMap = reentryMap1 <!> reentryMap2
+
+Since @e@ is required to be a monoid, @ContinueT@ forms a family of
+alternative functors that implement choice based on suspension and
+conclusion.  The computation 'empty' always suspends with 'mempty'.
+
+> x <|> y
+
+This computation concludes with the conclusion of either @x@ or @y@
+trying them in that order, or suspends if both of them suspend.  Note
+that both computations are performed to their conclusion or suspension.
+This allows @y@ both to have monadic effects as well as to register
+reentry points, even if @x@ concludes.
+
+There is also a combinator 'orElse' that tries @y@ only if @x@ actually
+suspends.  In that case, if @x@ concludes, then @y@ cannot register
+reentry spots or have effects in the underlying monad.
+
+-}
